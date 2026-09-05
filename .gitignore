@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*.bak
+*.bak-*
+*.py.txt
+*.blend1
+*.blend2
+.DS_Store
