@@ -157,6 +157,25 @@ def clip_protected(action):
     return clip_kind(action) in {"CAST", "ASSET"}
 
 
+def bake_made_from(clip):
+    """Bakes produced from this Cast clip, newest-looking last.
+
+    Matched on the clip name recorded at bake time, falling back to the
+    imported hash: a clip renamed after it was baked no longer matches by
+    name, and the hash is the one thing about it that never changes.
+    """
+    by_name, by_hash = [], []
+    wanted = clip.get(HASH_PROP)
+    for act in bpy.data.actions:
+        if not act.get("retarget_baked"):
+            continue
+        if act.get("retarget_from") == clip.name:
+            by_name.append(act)
+        elif wanted and act.get(HASH_PROP) == wanted:
+            by_hash.append(act)
+    return sorted(by_name or by_hash, key=lambda a: a.name)
+
+
 def bone_selected(pose_bone):
     """Bone.select was removed in Blender 5.x; selection lives on PoseBone now."""
     if hasattr(pose_bone, "select"):
@@ -817,6 +836,29 @@ class ANIM_OT_browser_pick_catalog(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
 
+def asset_candidate(context):
+    """The Action the asset panel promotes, and the clip it stood in for.
+
+    Promoting is meant to catalogue a retarget bake, but the browser stays on
+    the Cast clip the bake was made from - baking deliberately does not move
+    the selection, because anim_browser_index re-assigns whatever it lands on
+    to anim_browser_target, and that is the source skeleton, not the rig. So
+    when the selection is a Cast original with a bake behind it, the bake is
+    what gets promoted.
+
+    Returns (action, stood_in_for), where stood_in_for is the selected clip
+    when a bake was resolved on its behalf, and None when the selection is
+    being promoted as-is.
+    """
+    action = selected_action(context)
+    if action is None or clip_kind(action) != "CAST":
+        return action, None
+    bakes = bake_made_from(action)
+    if not bakes:
+        return action, None
+    return bakes[-1], action
+
+
 class ANIM_OT_browser_make_asset(bpy.types.Operator):
     bl_idname = "anim.browser_make_asset"
     bl_label = "Create Animation Asset"
@@ -829,12 +871,12 @@ class ANIM_OT_browser_make_asset(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        action = selected_action(context)
+        action, _ = asset_candidate(context)
         return action is not None and not is_asset(action)
 
     def execute(self, context):
         scene = context.scene
-        action = selected_action(context)
+        action, _ = asset_candidate(context)
         if action is None:
             self.report({"ERROR"}, "No clip selected")
             return {"CANCELLED"}
@@ -2479,7 +2521,7 @@ class VIEW3D_PT_anim_asset_send(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        action = selected_action(context)
+        action, stood_in_for = asset_candidate(context)
 
         if action is None:
             layout.label(text="No clip selected", icon="INFO")
@@ -2499,7 +2541,16 @@ class VIEW3D_PT_anim_asset_send(bpy.types.Panel):
         # allowed - a hand-keyed action on the rig is perfectly valid - but it
         # is called out, because promoting a raw Cast clip gives you an asset
         # whose channels are source-skeleton bones and will not drive the rig.
-        if clip_kind(action) != "BAKE":
+        # Naming the resolved bake matters: the row highlighted in the browser
+        # is the Cast clip, so without this the panel would be talking about an
+        # Action the user cannot see selected anywhere.
+        if stood_in_for is not None:
+            box = layout.box()
+            box.label(text="Bake from %s" % stood_in_for.name, icon="ACTION")
+            sub_row = box.row()
+            sub_row.enabled = False
+            sub_row.label(text=action.name)
+        elif clip_kind(action) != "BAKE":
             col = layout.column(align=True)
             col.alert = True
             col.label(text="Not a retarget bake", icon="ERROR")
