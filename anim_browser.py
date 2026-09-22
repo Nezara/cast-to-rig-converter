@@ -4953,54 +4953,6 @@ def _helldiver_pairs():
     return p
 
 
-def _warrior_pairs():
-    """target rig bone -> source (Cast) bone, cha_warrior on its Rigify rig.
-
-    The rig is a stock Rigify generate of a six-limbed metarig whose bones
-    were never renamed, so its controls read L0/L1/L2 and R0/R1/R2 rather
-    than arm and leg. Measured against the Cast skeleton at rest, limb 0 is
-    the claw arm, limb 1 the front leg and limb 2 the rear leg. The tail is
-    a basic_tail on bones still called Bone*, and the head and jaw controls
-    kept the names the metarig gave them.
-    """
-    p = {
-        "root": "root",
-        # 'boss' is the pelvis on the Cast rig - the entire skeleton hangs
-        # off it - and 'Body' is the rig's torso master.
-        "Body": "boss",
-        "So no head?": "head",
-        "Jaw": "big_jaw",
-    }
-    # Four Cast tail bones into a three-bone Rigify tail, so spine_lower_4
-    # (the tip) has nowhere to go. 'neck' likewise: the rig hangs its head
-    # control straight off the body.
-    for n in range(1, 4):
-        p["Bone" if n == 1 else "Bone.%03d" % (n - 1)] = "spine_lower_%d" % n
-    # (limb index, Cast chain prefix, the rig's tip control, the Cast bone
-    # that tip was built from). l_claw_3 has two children, one per pincer
-    # half - claw_4 and claw_5 - and the rig's Claw control lies along the
-    # claw_5 side, so that is the one it follows.
-    limbs = (
-        (0, "%s_claw", "%s0_Claw", "%s_claw_5"),
-        (1, "%s_front_leg", "Foot.%s", "%s_front_leg_4"),
-        (2, "%s_rear_leg", "Backfoot.%s", "%s_rear_leg_4"),
-    )
-    for lo, up in (("l", "L"), ("r", "R")):
-        for i, chain, tip, tip_src in limbs:
-            c = chain % lo
-            for n in (1, 2, 3):
-                p["%s%d_%d_fk.%s" % (up, i, n - 1, up)] = "%s_%d" % (c, n)
-            # The IK controls are mapped as well. The bind forces every
-            # slider to FK, but a rig somebody left in IK by hand then lands
-            # somewhere sensible instead of snapping back to rest.
-            p["%s%d_0_ik.%s" % (up, i, up)] = "%s_1" % c
-            p["%s%d_2_ik.%s" % (up, i, up)] = "%s_3" % c
-            if i:  # the two legs, not the claw arm
-                p["%s%d_2_heel_ik.%s" % (up, i, up)] = "%s_3" % c
-            p[tip % up] = tip_src % lo
-    return p
-
-
 RIG_PROFILES = {
     "HELLDIVER": {
         "label": "Helldiver",
@@ -5025,30 +4977,9 @@ RIG_PROFILES = {
                    (("ORG-r_foot", "ORG-head"), ("r_foot", "head"))),
         "anchor": (("hips",), (("ORG-hips",), ("hips",))),
     },
-    "WARRIOR": {
-        "label": "Warrior (cha_warrior)",
-        "info": "cha_warrior Cast skeleton onto its six-limbed Rigify rig",
-        "pairs": _warrior_pairs(),
-        "loc": ({"root", "Body"}
-                | set("%s%d_2_ik.%s" % (u, i, u)
-                      for u in ("L", "R") for i in range(3))),
-        "ikfk": tuple("%s%d_0_parent.%s" % (u, i, u)
-                      for u in ("L", "R") for i in range(3)),
-        # Measured across the rear legs: the claw arms swing far too freely
-        # to say which way the body is facing.
-        "hips": (("l_rear_leg_1", "r_rear_leg_1"),
-                 (("ORG-L2_0.L", "ORG-R2_0.R"), ("L2_0_fk.L", "R2_0_fk.R"))),
-        "height": (("l_rear_leg_4", "head"),
-                   (("ORG-Backfoot.L", "ORG-So no head?"),
-                    ("Backfoot.L", "So no head?"))),
-        # Both skeletons put their root at the object origin, so root to
-        # root is the anchor here - 'boss' sits well forward of the rig's
-        # torso master and matching those two would drag the body off.
-        "anchor": (("root",), (("root",),)),
-    },
 }
 
-_PROFILE_ORDER = ("HELLDIVER", "WARRIOR")
+_PROFILE_ORDER = ("HELLDIVER",)
 DEFAULT_PROFILE = "HELLDIVER"
 
 
@@ -5235,9 +5166,9 @@ def _ret_state(context):
     prof_id = getattr(sc, "anim_retarget_profile", DEFAULT_PROFILE)
     prof = rig_profile(prof_id)
     pairs = _ret_pairs_for(src, trg, prof)
-    # The best-fitting profile, so the panel can say "you picked Helldiver
-    # but the Warrior map is the one that fits these two". Silent unless it
-    # beats the current pick: an equal score is not evidence of anything.
+    # The best-fitting profile, so the panel can say "the profile you picked
+    # is not the one that fits these two". Silent unless it beats the current
+    # pick: an equal score is not evidence of anything.
     ranked = score_profiles(src, trg) if (src and trg) else []
     better = ranked[0] if ranked and ranked[0][1] > len(pairs) else None
     return {

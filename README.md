@@ -9,9 +9,8 @@ clips are**, a retargeter that drives those clips onto a control rig and bakes t
 plain keyframes, and a one-click path from a finished bake to a catalogued entry in
 Blender's Asset Browser.
 
-> **Heads up:** retargeting ships with two bone maps — the Helldiver Cast skeleton onto
-> the control rig by Lex_Dorkslav, and `cha_warrior` onto its six-limbed Rigify rig. Any
-> other pairing needs a new profile. See
+> **Heads up:** retargeting ships with one bone map — the Helldiver Cast skeleton onto the
+> control rig by Lex_Dorkslav. Any other pairing needs a new profile. See
 > [Adding another rig](#adding-another-rig); it is one dictionary entry.
 
 ---
@@ -175,17 +174,19 @@ Every pairing the add-on knows lives in `RIG_PROFILES`, one entry per source ske
 control rig. Adding a creature means adding an entry and nothing else:
 
 ```python
-"WARRIOR": {
-    "label": "Warrior (cha_warrior)",
-    "info":  "cha_warrior Cast skeleton onto its six-limbed Rigify rig",
-    "pairs": _warrior_pairs(),   # rig control : source bone
-    "loc":   {...},              # controls that follow the source in world space
-    "ikfk":  (...),              # sliders that must sit at FK
+"MY_CREATURE": {
+    "label": "My Creature",
+    "info":  "cha_my_creature Cast skeleton onto its Rigify rig",
+    "pairs": _my_creature_pairs(),   # rig control : source bone
+    "loc":   {...},                  # controls that follow the source in world space
+    "ikfk":  (...),                  # sliders that must sit at FK
     "hips":   (source bones, target candidates),
     "height": (source bones, target candidates),
     "anchor": (source bones, target candidates),
 },
 ```
+
+Add the id to `_PROFILE_ORDER` and it appears in the Profile dropdown.
 
 - `pairs` keys are bone names on your control rig, values are bone names on the imported
   skeleton.
